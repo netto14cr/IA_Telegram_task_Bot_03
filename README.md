@@ -84,12 +84,15 @@ After receiving the task, users can interact with it using the provided options:
 * Mark as Completed: Indicates that the task has been finished.
 * Mark as Pending: Indicates that the task is still ongoing or needs further attention.
 
-## 4. More information:
+## 4. Screenshots:
 
+- Displaying the Welcome Message
 ![Image from question 1](screenshots/screenshot1.png)
 
+- Displaying tasks with options
 ![Image from question 2](screenshots/screenshot2.png)
 
+- Marking tasks as completed or pending
 ![Image from question 3](screenshots/screenshot3.png)
 
 
