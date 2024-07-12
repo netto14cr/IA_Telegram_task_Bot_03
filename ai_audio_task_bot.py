@@ -1,9 +1,7 @@
 import os
 from dotenv import load_dotenv
-import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
-import time
 import speech_recognition as sr
 from pydub import AudioSegment
 
@@ -18,9 +16,15 @@ class TelegramAudioTaskBot:
         self.tasks = []
 
     async def start(self, update: Update, context):
+        keyboard = [
+            [InlineKeyboardButton("New Task", callback_data='start_tasks')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             "Welcome to the Task Bot!\n"
-            "Send me a voice message with a task and I will convert it to text."
+            "I can help you remember and complete tasks.\n"
+            "Click the button below to begin.",
+            reply_markup=reply_markup
         )
 
     async def handle_voice_message(self, update: Update, context):
@@ -40,13 +44,9 @@ class TelegramAudioTaskBot:
             audio_data = recognizer.record(source)
             try:
                 text = recognizer.recognize_google(audio_data)
-                self.tasks.append({'task': text, 'status': 'pending'})
-                keyboard = [
-                    [InlineKeyboardButton("Mark as Completed", callback_data=f'complete_{len(self.tasks)-1}')],
-                    [InlineKeyboardButton("Mark as Pending", callback_data=f'pending_{len(self.tasks)-1}')]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(f"Task: {text}", reply_markup=reply_markup)
+                self.tasks.append({'task': text, 'status': 'neutral'})
+                task_id = len(self.tasks) - 1
+                await self.send_task_message(update, task_id)
             except sr.UnknownValueError:
                 await update.message.reply_text("Sorry, I could not understand the audio.")
             except sr.RequestError as e:
@@ -55,17 +55,56 @@ class TelegramAudioTaskBot:
         os.remove(file_path)
         os.remove(wav_path)
 
+    async def send_task_message(self, update: Update, task_id: int):
+        task = self.tasks[task_id]
+        status_emoji = "📝" if task['status'] == 'neutral' else ("❌" if task['status'] == 'pending' else "✔️")
+        keyboard = [
+            [InlineKeyboardButton("Mark as Completed", callback_data=f'complete_{task_id}')],
+            [InlineKeyboardButton("Mark as Pending", callback_data=f'pending_{task_id}')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(f"Task: {task['task']} {status_emoji}", reply_markup=reply_markup)
+
     async def handle_callback(self, update: Update, context):
         query = update.callback_query
-        data = query.data.split('_')
-        action, task_id = data[0], int(data[1])
+        data = query.data
+
+        if data == 'start_tasks':
+            await query.message.reply_text("Send me a voice message with a task and I will convert it to text.")
+            await query.answer()
+            return
+
+        try:
+            action, task_id_str = data.split('_')
+            task_id = int(task_id_str)
+        except ValueError:
+            await query.answer("Invalid callback data.")
+            return
+        
+        if task_id >= len(self.tasks):
+            await query.answer("Task not found.")
+            return
+
+        task = self.tasks[task_id]
+
         if action == 'complete':
-            self.tasks[task_id]['status'] = 'completed'
+            task['status'] = 'completed'
             await query.answer("Task marked as completed.")
         elif action == 'pending':
-            self.tasks[task_id]['status'] = 'pending'
+            task['status'] = 'pending'
             await query.answer("Task marked as pending.")
-        await query.edit_message_reply_markup(None)
+
+        await self.edit_task_message(query, task_id)
+
+    async def edit_task_message(self, query, task_id: int):
+        task = self.tasks[task_id]
+        status_emoji = "📝" if task['status'] == 'neutral' else ("❌" if task['status'] == 'pending' else "✔️")
+        keyboard = [
+            [InlineKeyboardButton("Mark as Completed", callback_data=f'complete_{task_id}')],
+            [InlineKeyboardButton("Mark as Pending", callback_data=f'pending_{task_id}')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(f"Task: {task['task']} {status_emoji}", reply_markup=reply_markup)
 
     def run(self):
         self.application.run_polling()
@@ -76,6 +115,3 @@ if __name__ == '__main__':
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     bot = TelegramAudioTaskBot(TELEGRAM_TOKEN, OPENAI_API_KEY)
     bot.run()
-
-
-# https://t.me/AI_voice_task24_bot
