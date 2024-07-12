@@ -93,5 +93,5 @@ After receiving the task, users can interact with it using the provided options:
 ![Image from question 3](screenshots/screenshot3.png)
 
 
-## 5. More information:
+## 5. License:
 *This bot is for educational purposes and leverages OpenAI's capabilities for speech recognition and task management.*
