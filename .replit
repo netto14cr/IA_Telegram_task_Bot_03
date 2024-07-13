@@ -1,0 +1,7 @@
+modules = ["python-3.12"]
+run = "python ai_audio_task_bot.py"
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "python ai_audio_task_bot.py"]
