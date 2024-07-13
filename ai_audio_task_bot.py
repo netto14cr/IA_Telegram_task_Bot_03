@@ -16,6 +16,8 @@ class TelegramAudioTaskBot:
         self.application.add_handler(MessageHandler(filters.VOICE, self.handle_voice_message))
         self.application.add_handler(CallbackQueryHandler(self.handle_callback))
         self.tasks = []
+        self.last_task_message = None  # Para almacenar el último mensaje de tarea enviado
+        self.language_menu_message = None  # Para almacenar el mensaje del menú de idioma
 
     async def start(self, update: Update, context):
         keyboard = [
@@ -64,10 +66,11 @@ class TelegramAudioTaskBot:
             [InlineKeyboardButton(self.message_manager.get_text("mark_pending"), callback_data=f'pending_{task_id}')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
+        message = await update.message.reply_text(
             self.message_manager.get_text("task_message").format(task['task'], status_emoji),
             reply_markup=reply_markup
         )
+        self.last_task_message = message  # Almacena el mensaje de tarea para referencia futura
 
     async def handle_callback(self, update: Update, context):
         query = update.callback_query
@@ -86,7 +89,9 @@ class TelegramAudioTaskBot:
                 [InlineKeyboardButton("日本語", callback_data='set_language_ja')]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.message.reply_text(self.message_manager.get_text("select_language"), reply_markup=reply_markup)
+            if self.language_menu_message:
+                await self.language_menu_message.delete()
+            self.language_menu_message = await query.message.reply_text(self.message_manager.get_text("select_language"), reply_markup=reply_markup)
             await query.answer()
             return
 
@@ -103,6 +108,12 @@ class TelegramAudioTaskBot:
             elif data == 'set_language_ja':
                 self.message_manager.set_language("ja-JP", "ja")
                 await query.message.reply_text("言語が日本語に設定されました。")
+
+            # Oculta el menú de cambio de idioma después de seleccionar uno
+            if self.language_menu_message:
+                await self.language_menu_message.delete()
+                self.language_menu_message = None
+
             await query.answer()
             return
 
@@ -110,13 +121,13 @@ class TelegramAudioTaskBot:
             task_id = int(data.split('_')[1])
             if 0 <= task_id < len(self.tasks):
                 self.tasks[task_id]['status'] = 'completed'
-                await query.message.edit_text(
+                await self.last_task_message.edit_text(
                     self.message_manager.get_text("task_message").format(self.tasks[task_id]['task'], "✔️"),
-                    reply_markup=query.message.reply_markup
+                    reply_markup=self.last_task_message.reply_markup
                 )
-                await query.message.reply_text(self.message_manager.get_text("task_completed"))
+                await query.message.reply_text(self.message_manager.get_text("task_completed"), quote=True, ephemeral=True)
             else:
-                await query.message.reply_text(self.message_manager.get_text("task_not_found"))
+                await query.message.reply_text(self.message_manager.get_text("task_not_found"), quote=True, ephemeral=True)
             await query.answer()
             return
 
@@ -124,17 +135,17 @@ class TelegramAudioTaskBot:
             task_id = int(data.split('_')[1])
             if 0 <= task_id < len(self.tasks):
                 self.tasks[task_id]['status'] = 'pending'
-                await query.message.edit_text(
+                await self.last_task_message.edit_text(
                     self.message_manager.get_text("task_message").format(self.tasks[task_id]['task'], "❌"),
-                    reply_markup=query.message.reply_markup
+                    reply_markup=self.last_task_message.reply_markup
                 )
-                await query.message.reply_text(self.message_manager.get_text("task_pending"))
+                await query.message.reply_text(self.message_manager.get_text("task_pending"), quote=True, ephemeral=True)
             else:
-                await query.message.reply_text(self.message_manager.get_text("task_not_found"))
+                await query.message.reply_text(self.message_manager.get_text("task_not_found"), quote=True, ephemeral=True)
             await query.answer()
             return
 
-        await query.message.reply_text(self.message_manager.get_text("invalid_callback"))
+        await query.message.reply_text(self.message_manager.get_text("invalid_callback"), quote=True, ephemeral=True)
         await query.answer()
 
     def run(self):
